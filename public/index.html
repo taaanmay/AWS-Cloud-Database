@@ -1,18 +1,18 @@
 <html>
     <head>
-        <!-- <title>cs4000a2-env-1.eba-x339smue.eu-west-1.elasticbeanstalk.com</title> -->
+
         <title>Movies Database</title>
     </head>
     <body>
-
+        <link rel="stylesheet" href = "https://dl.dropboxusercontent.com/s/ugvh912noj0i6ov/sinead.css?dl=0"></link>
         <script src='https://cdn.jsdelivr.net/npm/vue/dist/vue.js'></script>
 
         <div id='app'>
 
-            <h1>Movies</h1>
+            <h1>Look-Up Movies</h1>
             
             <h2>Create Table</h2>
-            <button v-on:click='appCreate'>Create</button>
+            <button v-on:click='createTableFunc'>Create</button>
            
             
             <br>
@@ -21,33 +21,38 @@
             <input v-model='queryYear' placeholder='Year'><br>
             <input v-model='queryPrefix' placeholder='Movie Title (starts with)'><br>
             <input v-model='queryRating' placeholder='Rating (Greater Than)'><br>
-            <button v-on:click='appQuery'>Query</button>
+            <button v-on:click='queryTableFunc'>Query</button>
             
             <br>
             
-            <h2>Delete Table</h2>
+            <h2>Destroy Table</h2>
             
-            <button v-on:click='appDelete'>Delete</button>
+            <button v-on:click='deleteTableFunc'>Destroy</button>
             
             <br>
 
-            <h2>Query Results</h2>
-            <table>
-                <tr>
-                    <th>#</th>
-                    <th>Title</th>
-                    <th>Year</th>
-                    <th>Rating</th>
-                    <!-- <th>Rank</th> -->
-                </tr>
-                <tr v-for='(movie, index) in movies'>
-                    <td>{{ index + 1 }}</td>
-                    <td>{{ movie.title }}</td>
-                    <td>{{ movie.year }}</td>
-                    <td>{{ (movie.rating == -1) ? '' : movie.rating }}</td>
-                    <!-- <td>{{ (movie.rank == -1) ? '' : movie.rank }}</td> -->
-                </tr>
-            </table>
+            <br>
+            <span>  
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Title</th>
+                            <th>Year</th>
+                            <th>Rating</th>
+                        </tr>
+                    </thead>
+                    <tr v-for='(movie, index) in movies'>       
+                        <th>{{ index + 1 }}</th>
+                        <th>{{ movie.title }}</th>
+                        <th>{{ movie.year }}</th>
+                        <th>{{ (movie.rating == -1) ? '' : movie.rating }}</th>
+                    </tr>
+                </table>
+            </span>
+            
+           
+                        
 
         </div>
 
@@ -61,28 +66,29 @@
                     movies: {}
                 },
                 methods: {
-                    appCreate() {
-                        fetch(`appCreate`)
+                    createTableFunc() {
+                        fetch(`createTableFunc`)
                             .then(res => res.json())
                             .then(data => {
                                 alert(data.result.message);
                             });
                     },
-                    appDelete() {
-                        fetch(`appDelete`)
-                            .then(res => res.json())
-                            .then(data => {
-                                alert(data.result.message);
-                            });
-                    },
-                    appQuery() {
-                        fetch(`appQuery/${this.queryYear}/${this.queryRating}/${this.queryPrefix}`)
+                    queryTableFunc() {
+                        fetch(`queryTableFunc/${this.queryYear}/${this.queryRating}/${this.queryPrefix}`)
                             .then(res => res.json())
                             .then(data => {
                                 this.movies = data.result.movies;
                                 if (!data.result.success) alert(data.result.message);
                             });
+                    },
+                    deleteTableFunc() {
+                        fetch(`deleteTableFunc`)
+                            .then(res => res.json())
+                            .then(data => {
+                                alert(data.result.message);
+                            });
                     }
+                    
                 }
             })
         </script>

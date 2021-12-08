@@ -17,13 +17,13 @@ AWS.config.update({
 
 
 app.use(express.static(publicPath));
-app.get('/appCreate', setup_table);
-app.get('/appDelete', delete_table);
-app.get('/appQuery/:year', query_dynamo_table); // in case no prefix is included
-// app.get('/appQuery/:year/:prefix', query_dynamo_table);
+app.get('/createTableFunc', setup_table);
+app.get('/deleteTableFunc', delete_table);
+app.get('/queryTableFunc/:year', query_dynamo_table); // in case no prefix is included
+// app.get('/queryTableFunc/:year/:prefix', query_dynamo_table);
 
-app.get('/appQuery/:year/:rating/:prefix', query_dynamo_table);
-app.get('/appQuery/:year/:rating', query_dynamo_table);
+app.get('/queryTableFunc/:year/:rating/:prefix', query_dynamo_table);
+app.get('/queryTableFunc/:year/:rating', query_dynamo_table);
 
 app.listen(port, () => console.log(`App listening on port ${port}`));
 
@@ -34,6 +34,8 @@ const BATCH_SIZE = 25;
     
 let s3 = new AWS.S3();
 let dynamoDB = new AWS.DynamoDB();
+// let docClient = new AWS.DynamoDB.DocumentClient();
+
 
 
 // Function to check if table exists or not
@@ -101,12 +103,12 @@ async function get_data_from_S3() {
 async function create_dynamo_table(tableName) {
     let params = {
         AttributeDefinitions: [
-            { AttributeName: 'titleLower', AttributeType: 'S' },
+            { AttributeName: 'title_upper_case', AttributeType: 'S' },
             { AttributeName: 'releaseYear', AttributeType: 'N' },
             // { AttributeName: 'rating', AttributeType: 'N' },
         ],
         KeySchema: [
-            { AttributeName: 'titleLower', KeyType: 'HASH' },
+            { AttributeName: 'title_upper_case', KeyType: 'HASH' },
             { AttributeName: 'releaseYear', KeyType: 'RANGE' },
             // { AttributeName: 'rating', KeyType: 'RANGE' }
 
@@ -131,34 +133,102 @@ async function create_dynamo_table(tableName) {
 // Function to insert data into DynamoDB table
     // Used in setup_table function
 async function insertIntoDynamoTable(tableName, json) {
-    // DynamoDB only allows batch inserts of 25 items
-    let batches = [], batch = [];
-    for (var i = 0; i < json.length; i++) {
-        if (batch.length == BATCH_SIZE) {
-            batches.push(batch);
-            batch = [];
+    let list_of_movies = [];
+    let all_movies_set = [];
+    
+    // To use Batch Write Item, we send use batches of movie with the size 25. 
+    // 
+    let index;
+    for (index = 0;index < json.length; index++) {
+
+        if (list_of_movies.length == BATCH_SIZE) {
+            all_movies_set.push(list_of_movies);
+            list_of_movies = [];
         }
-        batch.push({
+        list_of_movies.push({
             PutRequest: {
                 Item: {
-                    titleLower: {'S': json[i].title.toLowerCase() },
-                    releaseYear: {'N': json[i].year?.toString() ?? '-1' },
-                    title: {'S': json[i].title },
-                    rating: {'N': json[i].info.rating?.toString() ?? '-1' },
-                    rank: {'N': json[i].info.rank?.toString() ?? '-1' }
+                    title_upper_case: {'S': json[index].title.toUpperCase() },
+                    releaseYear: {'N': json[index].year?.toString() ?? '-1' },
+                    title: {'S': json[index].title },
+                    rating: {'N': json[index].info.rating?.toString() ?? '-1' },
+                    rank: {'N': json[index].info.rank?.toString() ?? '-1' }
                 }
             }
         });
     }
-    if (batch.length != 0) batches.push(batch);
+    if (list_of_movies.length != 0) all_movies_set.push(list_of_movies);
     
-    for (var i = 0; i < batches.length; i++) {
-        console.log(`Inserting data batch ${i + 1}/${batches.length}`);
-        await dynamoDB.batchWriteItem({ RequestItems: { [tableName]: batches[i] } }).promise();
+    for (var i = 0; i < all_movies_set.length; i++) {
+        console.log(`${i + 1} batch uploaded`);
+        // console.log(`Inserting data batch ${i + 1}/${all_movies_set.length}`);
+        await dynamoDB.batchWriteItem({ RequestItems: { [tableName]: all_movies_set[i] } }).promise();
     }
     
 }
 
+
+// async function insertIntoDynamoTableV2(tableName, json){
+//     var params = {
+//         RequestItems: {
+//          "Music": [
+//              {
+//             PutRequest: {
+//              Item: {
+//               "AlbumTitle": {
+//                 S: "Somewhat Famous"
+//                }, 
+//               "Artist": {
+//                 S: "No One You Know"
+//                }, 
+//               "SongTitle": {
+//                 S: "Call Me Today"
+//                }
+//              }
+//             }
+//            }, 
+//              {
+//             PutRequest: {
+//              Item: {
+//               "AlbumTitle": {
+//                 S: "Songs About Life"
+//                }, 
+//               "Artist": {
+//                 S: "Acme Band"
+//                }, 
+//               "SongTitle": {
+//                 S: "Happy Day"
+//                }
+//              }
+//             }
+//            }, 
+//              {
+//             PutRequest: {
+//              Item: {
+//               "AlbumTitle": {
+//                 S: "Blue Sky Blues"
+//                }, 
+//               "Artist": {
+//                 S: "No One You Know"
+//                }, 
+//               "SongTitle": {
+//                 S: "Scared of My Shadow"
+//                }
+//              }
+//             }
+//            }
+//           ]
+//         }
+//        };
+//        await dynamodb.batchWriteItem(params, function(err, data) {
+//          if (err) console.log(err, err.stack); // an error occurred
+//          else     console.log(data);           // successful response
+//          /*
+//          data = {
+//          }
+//          */
+//        });
+// }
 
 
 // ======================== DELETE TABLE ========================================
@@ -208,7 +278,7 @@ async function query_dynamo_table(req, res) {
             ratingParam = 0;
         }
         console.log('Querying Database Table');
-        let data = await get_data(DB_TABLE, year.toString(), prefix.toLowerCase(), ratingParam.toString());
+        let data = await get_data(DB_TABLE, year.toString(), prefix.toUpperCase(), ratingParam.toString());
         console.log('Querying Done');
         res.json(generateResponse(true, 'OK', data));
     }
@@ -224,7 +294,7 @@ async function get_data(tableName, year, prefix, rating) {
             ':p': {S: prefix},
             ':r': {N: rating}
         },
-        FilterExpression: 'releaseYear = :y and begins_with (titleLower, :p) and rating >= :r',
+        FilterExpression: 'releaseYear = :y and begins_with (title_upper_case, :p) and rating >= :r',
         ProjectionExpression: 'title, releaseYear, rating',
         // ProjectionExpression: 'title, releaseYear, rating, rank',
         TableName: tableName
