@@ -70,7 +70,7 @@
                         fetch(`createTableFunc`)
                             .then(res => res.json())
                             .then(data => {
-                                alert(data.result.message);
+                                alert(data.result.text);
                             });
                     },
                     queryTableFunc() {
@@ -78,14 +78,14 @@
                             .then(res => res.json())
                             .then(data => {
                                 this.movies = data.result.movies;
-                                if (!data.result.success) alert(data.result.message);
+                                if (!data.result.status) alert(data.result.text);
                             });
                     },
                     deleteTableFunc() {
                         fetch(`deleteTableFunc`)
                             .then(res => res.json())
                             .then(data => {
-                                alert(data.result.message);
+                                alert(data.result.text);
                             });
                     }
                     

@@ -19,38 +19,37 @@ AWS.config.update({
 app.use(express.static(publicPath));
 app.get('/createTableFunc', setup_table);
 app.get('/deleteTableFunc', delete_table);
-app.get('/queryTableFunc/:year', query_dynamo_table); // in case no prefix is included
-// app.get('/queryTableFunc/:year/:prefix', query_dynamo_table);
-
+app.get('/queryTableFunc/:year', query_dynamo_table); 
 app.get('/queryTableFunc/:year/:rating/:prefix', query_dynamo_table);
 app.get('/queryTableFunc/:year/:rating', query_dynamo_table);
 
 app.listen(port, () => console.log(`App listening on port ${port}`));
 
-const S3_BUCKET = 'csu44000assignment220';
 const S3_OBJECT = 'moviedata.json';
+const S3_BUCKET = 'csu44000assignment220';
 const DB_TABLE = 'movies';
-const BATCH_SIZE = 25;
+
     
 let s3 = new AWS.S3();
 let dynamoDB = new AWS.DynamoDB();
-// let docClient = new AWS.DynamoDB.DocumentClient();
 
+const BATCH_SIZE = 25;
 
 
 // Function to check if table exists or not
-async function checkDynamoTableExists(tableName) {
+async function doesDynamoTableExist(tableName) {
     let data = await dynamoDB.listTables({}).promise();
+    
     return data.TableNames.includes(tableName);
 }
 
 
 // Function to generate Response messages
-function generateResponse(_success, _message, _movies) {
+function send_response(status, text, movies) {
     return { result: {
-        success: _success,
-        message: _message,
-        movies: _movies
+        status: status,
+        text: text,
+        movies: movies
     }};
 }
 
@@ -60,9 +59,9 @@ function generateResponse(_success, _message, _movies) {
 // Creating a DynamoDB Table and filling it with movies data
 async function setup_table(_, res) {
     // Check if table exists
-    let tableExists = await checkDynamoTableExists(DB_TABLE);
+    let tableExists = await doesDynamoTableExist(DB_TABLE);
     if (tableExists) {
-        res.json(generateResponse(false, 'Table already exists', {}));
+        res.json(send_response(false, 'Table already exists', {}));
         return;
     }
 
@@ -84,7 +83,7 @@ async function setup_table(_, res) {
    
     console.log('Done!');
     
-    res.json(generateResponse(true, 'Creation successful!', {}));
+    res.json(send_response(true, 'Creation successful!', {}));
 }
 
 // Function to get data from S3 bucket
@@ -137,14 +136,17 @@ async function insertIntoDynamoTable(tableName, json) {
     let all_movies_set = [];
     
     // To use Batch Write Item, we send use batches of movie with the size 25. 
-    // 
+    // Add the list_of_movies and when it reaches the capacity of 25, add it to all_movies_set
     let index;
     for (index = 0;index < json.length; index++) {
 
+        // If capacity is reached, push movies to all_movies_set
         if (list_of_movies.length == BATCH_SIZE) {
             all_movies_set.push(list_of_movies);
             list_of_movies = [];
         }
+
+        // Add Movie to the set with params
         list_of_movies.push({
             PutRequest: {
                 Item: {
@@ -157,78 +159,19 @@ async function insertIntoDynamoTable(tableName, json) {
             }
         });
     }
+
+    // Push the movies if any left
     if (list_of_movies.length != 0) all_movies_set.push(list_of_movies);
     
+
+    // Use Batch Write function to upload to DynamoDB
     for (var i = 0; i < all_movies_set.length; i++) {
         console.log(`${i + 1} batch uploaded`);
-        // console.log(`Inserting data batch ${i + 1}/${all_movies_set.length}`);
+       
         await dynamoDB.batchWriteItem({ RequestItems: { [tableName]: all_movies_set[i] } }).promise();
     }
     
 }
-
-
-// async function insertIntoDynamoTableV2(tableName, json){
-//     var params = {
-//         RequestItems: {
-//          "Music": [
-//              {
-//             PutRequest: {
-//              Item: {
-//               "AlbumTitle": {
-//                 S: "Somewhat Famous"
-//                }, 
-//               "Artist": {
-//                 S: "No One You Know"
-//                }, 
-//               "SongTitle": {
-//                 S: "Call Me Today"
-//                }
-//              }
-//             }
-//            }, 
-//              {
-//             PutRequest: {
-//              Item: {
-//               "AlbumTitle": {
-//                 S: "Songs About Life"
-//                }, 
-//               "Artist": {
-//                 S: "Acme Band"
-//                }, 
-//               "SongTitle": {
-//                 S: "Happy Day"
-//                }
-//              }
-//             }
-//            }, 
-//              {
-//             PutRequest: {
-//              Item: {
-//               "AlbumTitle": {
-//                 S: "Blue Sky Blues"
-//                }, 
-//               "Artist": {
-//                 S: "No One You Know"
-//                }, 
-//               "SongTitle": {
-//                 S: "Scared of My Shadow"
-//                }
-//              }
-//             }
-//            }
-//           ]
-//         }
-//        };
-//        await dynamodb.batchWriteItem(params, function(err, data) {
-//          if (err) console.log(err, err.stack); // an error occurred
-//          else     console.log(data);           // successful response
-//          /*
-//          data = {
-//          }
-//          */
-//        });
-// }
 
 
 // ======================== DELETE TABLE ========================================
@@ -236,28 +179,19 @@ async function insertIntoDynamoTable(tableName, json) {
 
 // Function to delete DynamoDB table
 async function delete_table(_, res) {
-    let tableExists = await checkDynamoTableExists(DB_TABLE);
+    let tableExists = await doesDynamoTableExist(DB_TABLE);
+    
     if (!tableExists) {
-        res.json(generateResponse(false, 'Table does not exist.', {}));
+        res.json(send_response(false, 'Table does not exist.', {}));
         return;
     }
     
     console.log('Deleting Table')
-    // await deleteDynamoTable(DB_TABLE);
     let params = { TableName: DB_TABLE };
     await dynamoDB.deleteTable(params).promise();
     console.log('Done')
     
-    res.json(generateResponse(true, 'Table Deleted!', {}));
-}
-
-
-
-// Function to delete table
-    
-async function deleteDynamoTable(tableName) {
-    let params = { TableName: tableName };
-    await dynamoDB.deleteTable(params).promise();
+    res.json(send_response(true, 'Table Deleted!', {}));
 }
 
 
@@ -265,13 +199,16 @@ async function deleteDynamoTable(tableName) {
 
 // Function to query movies using Year, Prefix and Rating
 async function query_dynamo_table(req, res) {
+    
+    // Extract Parameters from URL
     let year = parseInt(req.params.year, 10);
-    let prefix = req.params.prefix ?? '';
     let ratingParam = parseInt(req.params.rating, 10) ?? 0;
+    let prefix = req.params.prefix ?? '';
+    
 
     if (isNaN(year)) {
         // Year not entered
-        res.json(generateResponse(false, 'Invalid year', {}));
+        res.json(send_response(false, 'Invalid year', {}));
     } else {
 
         if(isNaN(ratingParam)){
@@ -280,7 +217,7 @@ async function query_dynamo_table(req, res) {
         console.log('Querying Database Table');
         let data = await get_data(DB_TABLE, year.toString(), prefix.toUpperCase(), ratingParam.toString());
         console.log('Querying Done');
-        res.json(generateResponse(true, 'OK', data));
+        res.json(send_response(true, 'OK', data));
     }
 }
 
@@ -289,15 +226,14 @@ async function query_dynamo_table(req, res) {
 async function get_data(tableName, year, prefix, rating) {
     // Parameter Defined
     let params = {
+        TableName: tableName,
         ExpressionAttributeValues: {
             ':y': {N: year},
             ':p': {S: prefix},
             ':r': {N: rating}
         },
         FilterExpression: 'releaseYear = :y and begins_with (title_upper_case, :p) and rating >= :r',
-        ProjectionExpression: 'title, releaseYear, rating',
-        // ProjectionExpression: 'title, releaseYear, rating, rank',
-        TableName: tableName
+        ProjectionExpression: 'title, releaseYear, rating'
     }
     
     // Scan Data
@@ -310,7 +246,6 @@ async function get_data(tableName, year, prefix, rating) {
             title: item.title.S,
             year: item.releaseYear.N,
             rating: item.rating.N
-            // rank: item.rank.N
         });
     });
 
